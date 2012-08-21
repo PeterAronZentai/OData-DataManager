@@ -1,0 +1,166 @@
+<html>
+    <head>
+        <script src="/scripts/jquery-1.7.2.min.js"></script>
+        <script src="scripts/datajs-1.0.3.js"></script>
+        <script type="text/javascript" src="scripts/q.js"></script>
+        <script src="/scripts/jaydata/jaydata.js"></script>
+        <script src="scripts/jaydata/jaydataproviders/oDataProvider.js"></script>
+        <script src="/scripts/JaySvcUtil.js"></script>
+        <script src="scripts/knockout-2.1.0.debug.js"></script>
+        <script type="text/javascript" src="scripts/jaydata/jaydatamodules/qDeferred.js"></script>
+        <script src="scripts/jaygrid-table-template.js"></script>
+        <script src="scripts/jaygrid.js"></script>
+        <!--<script src="scripts/jay-property-editor.js"></script>-->
+        <script src="scripts/jaydata/jaydatamodules/knockout.js"></script>
+        <script type="text/javascript">
+
+
+
+            $(function() {
+
+                function dataManagerModel() {
+
+                    var self = this;
+                    self.context = ko.observable();
+
+                    self.sets = ko.computed( function() {
+                        console.log("get sets computed");
+                        console.log(self.context());
+                        if (self.context()) {
+                            var result = [];
+                            for(var name in self.context()) {
+                                if (self.context()[name] instanceof $data.EntitySet) {
+                                    result.push(this.context()[name]);
+                                }
+                            }
+                            console.log(result);
+                            return result;
+                        }
+                    }, this)
+
+
+                    self.selectSet = function(eSet) {
+                        self.collection(eSet);
+                    }
+
+                    self.esPageSize = ko.observable(50);
+                    self.collection = ko.observable();
+                    self.visible = ko.observable(true);
+
+                }
+
+                var databaseManagerModel = new dataManagerModel();
+                ko.applyBindings(databaseManagerModel, document.getElementById("DataManagerUI"));
+
+                $data.Entity.extend("$odata.Endpoint", {
+                   id: { type: 'int', key: true, computed: true },
+                   url: { type: String } ,
+                   username: { type: String } ,
+                   password: { type: String }
+                });
+
+                $data.EntityContext.extend("$odata.db", {
+                    repositories: { type: $data.EntitySet, elementType: $odata.Endpoint }
+                });
+
+                function repositoriesModel() {
+                    var c = new $odata.db({ name: 'sqLite', databaseName:'odata'});
+                    var self = this;
+
+                    self.items = ko.observableArray([]);
+                    self.newItem = ko.observable();
+
+                    self.addNew = function() {
+                        var item = new $odata.Endpoint().asKoObservable();
+                        self.newItem(item);
+                    }
+
+                    self.removeEndpoint = function( ep) {
+                        c.remove( ep);
+                        c.saveChanges(function() {
+                            self.items.remove(ep);
+                        })
+                    }
+
+                    self.selectEndpoint  = function(ep) {
+                        $data.MetadataLoader.load(ep.url(), function (factory) {
+                            var context = factory();
+                            console.dir("setting context");
+                            databaseManagerModel.context(context);
+                            console.dir("context set");
+                            //loadUserManagerUI(context);
+                        });
+                    }
+
+                    self.save = function() {
+                        c.repositories.add(ko.utils.unwrapObservable(self.newItem));
+                        c.saveChanges( function() {
+                            self.items.push(self.newItem());
+                            self.newItem(null);
+                        })
+                    }
+
+                    c.onReady( function() {
+                        c.repositories.toArray(self.items);
+                    })
+
+                };
+
+
+                var repoModel = new repositoriesModel();
+                ko.applyBindings(repoModel, document.getElementById("RepositoriesUI"));
+
+            })
+        </script>
+    </head>
+<body>
+    <div id="output">
+    </div>
+
+
+    <div id="RepositoriesUI">
+        <h3>Your repositories</h3>
+        <ul data-bind="foreach: items">
+            <li>
+                <a href="#" data-bind="click: $root.selectEndpoint, text: url"></a> |
+                <a href="#" data-bind="click: $root.removeEndpoint">Remove</a>
+            </li>
+        </ul>
+        <a href="#" data-bind="click: $root.addNew">Add new</a>
+        <form data-bind="submit:save, with:newItem">
+            Url:<input data-bind="value: url" />
+            Login: <input data-bind="value: username" />
+            Pw: <input data-bind="value: password" />
+            <input type="submit" value="save" />
+        </form>
+    </div>
+
+    <div id="DataManagerUI">
+
+        <h3>Your data</h3>
+        <div data-bind="foreach: $root.sets">
+            <a href="#"  data-bind="click: $root.selectSet, text: $data.collectionName"></a>
+        </div>
+        <h4></h4>
+        <div id="x567" data-bind="jayGrid: {
+                        source: collection,
+                        pageSize: esPageSize}">
+
+            <script type="text/html" data-type-template="Edm.String">
+                <div style="background-color: silver" data-bind="text: $parent[name]"></div>
+            </script>
+
+            <script type="text/html" data-type-template="Edm.Boolean">
+                <input type="checkbox" data-bind="checked: $parent[name]" disabled />
+            </script>
+
+
+            <script type="text/html" data-field-template="Roles">
+                <div data-bind="text: $data"></div>
+            </script>
+        </div>
+
+    </div>
+
+</body>
+</html>
